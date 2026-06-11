@@ -1,5 +1,7 @@
 # Project Plan
 
+Languages: [English](PROJECT_PLAN.md) | [简体中文](PROJECT_PLAN.zh-CN.md)
+
 ## Background
 
 The original FnOS deployment note used a manual Python virtual environment and a

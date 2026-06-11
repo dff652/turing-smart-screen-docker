@@ -1,5 +1,7 @@
 # Turing Smart Screen Docker
 
+Languages: [English](README.md) | [简体中文](README.zh-CN.md)
+
 Unofficial Docker packaging for
 [`mathoudebine/turing-smart-screen-python`](https://github.com/mathoudebine/turing-smart-screen-python),
 targeting FnOS/NAS hosts such as Intel N100 mini PCs with Turing/TURZX smart
