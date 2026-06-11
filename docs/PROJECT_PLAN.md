@@ -18,40 +18,33 @@ systemd service:
 The Docker packaging replaces venv and systemd with a container runtime. The host
 only needs Docker and USB/serial device access.
 
-## Current State
+## Design
 
-- Local project path: `/home/dff652/my_project/turing-smart-screen-docker`
-- Source prototype path: `/home/dff652/my_project/homelab/nas/turing-smart-screen`
-- Original note path: `/home/dff652/my_project/homelab/nas/docs/turing-smart N100.md`
-- Dockerfile, Compose file, entrypoint, README, and GitHub Actions workflow exist.
-- Default upstream ref is `3.10.0`.
-- Build target is `linux/amd64` first, matching Intel N100/FnOS.
-- GitHub remote is configured:
-  `git@github.com:dff652/turing-smart-screen-docker.git`.
-- `main` has been pushed to GitHub at commit
-  `7c61e0e Initial Docker packaging`.
+- The upstream source is fetched during the image build.
+- Python dependencies are installed into a virtual environment inside the image.
+- `/config/config.yaml` is persisted outside the image.
+- Custom themes can be mounted under `/config/themes`.
+- NAS startup is handled by Docker restart policy instead of a custom systemd
+  service.
 
-Verified locally on 2026-06-11:
+Default build settings:
 
-- `docker compose config` worked in the prototype directory.
-- Docker pulled `python:3.10-slim-bookworm` successfully.
-- Build reached apt/source stages before user interruption.
-- Final image has not yet been fully built.
-- No background build process or running turing container was left behind.
+- Upstream ref: `3.10.0`
+- Initial platform: `linux/amd64`
+- Runtime base image: `python:3.10-slim-bookworm`
+
+Start with `linux/amd64`, matching Intel N100/FnOS. Add `linux/arm64` only after
+the amd64 image is proven on the target host.
 
 ## Environment and Size Notes
 
-Known local measurements:
+Known local measurements from early build testing:
 
 - `python:3.10-slim-bookworm`: about 195 MB after pull.
 - BuildKit cache after partial build: about 162 MB.
-- Dockerfile frontend cache from the prototype: about 43.4 MB. The standalone
-  Dockerfile no longer requires the external frontend directive, so future local
-  builds should avoid this extra pull.
 - Runtime apt packages: about 11.5 MB download, about 62.6 MB installed.
-- Builder apt packages: about 85 MB download, about 368 MB installed in build layers.
-- Upstream source archive download reached 14 MB before interruption.
-- Project files are tiny, around tens of KB.
+- Builder apt packages: about 85 MB download, about 368 MB installed in build
+  layers.
 
 Expected space requirement:
 
@@ -64,19 +57,16 @@ only pulls the final image.
 
 ## Publishing Strategy
 
-Use GitHub Actions to build and publish images. The first workflow intentionally
-publishes only on `main`, version tags, or manual dispatch; pull request builds
-can be added later after registry metadata no longer depends on Docker Hub
-secrets.
+Use GitHub Actions to build and publish images. The workflow publishes on
+`main`, version tags, or manual dispatch.
 
 Registries:
 
-- Docker Hub: `DOCKERHUB_USERNAME/turing-smart-screen`
+- Docker Hub: `dff652/turing-smart-screen`
 - GHCR: `ghcr.io/<github-owner>/turing-smart-screen`
 
-Required GitHub repository secrets:
+Required GitHub repository secret:
 
-- `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
 
 Tag policy:
@@ -86,87 +76,24 @@ Tag policy:
 - `git-<sha>` for traceability.
 - `upstream-3.10.0` for upstream source traceability.
 
-Start with `linux/amd64`. Add `linux/arm64` only after the amd64 image is proven
-on the N100/FnOS target.
+Docker Hub automation should use a personal access token rather than an account
+password. The Docker Hub namespace is configured in the workflow as `dff652`.
 
-## Remaining Work
+## Validation
 
-1. Build the image fully, preferably in GitHub Actions.
-2. If the build fails, add only the minimum missing dependencies.
-3. Run an import smoke test:
-
-   ```bash
-   docker run --rm <image> python -c "import psutil, serial, usb; print('ok')"
-   ```
-
-4. Test on the real FnOS/NAS host with the screen attached.
-5. Confirm whether `/dev/ttyACM0`, `/dev/ttyUSB0`, or direct USB mode is needed.
-6. Tune `config/config.yaml` for the actual screen model, theme, revision, and
-   brightness.
-7. Decide whether `privileged: true` is needed as a temporary TUR_USB debug mode.
-
-## GitHub Repository Setup
-
-`gh` is not installed in the current environment. The remote was created/pushed
-manually by the user.
-
-Current remote:
+After a published image is available, run the import smoke test:
 
 ```bash
-origin git@github.com:dff652/turing-smart-screen-docker.git
+docker run --rm --entrypoint python dff652/turing-smart-screen:latest -c "import psutil, serial, usb; print('ok')"
 ```
 
-Pushed commit:
-
-```text
-7c61e0e Initial Docker packaging
-```
-
-The setup commands already run:
+Then test on the real FnOS/NAS host with the screen attached:
 
 ```bash
-cd /home/dff652/my_project/turing-smart-screen-docker
-git remote add origin git@github.com:dff652/turing-smart-screen-docker.git
-git push -u origin main
+cp .env.example .env
+sed -i 's|# IMAGE=.*|IMAGE=dff652/turing-smart-screen:latest|' .env
+docker compose up -d
+docker logs -f turing-smart-screen
 ```
 
-Then add Docker Hub secrets in GitHub:
-
-```text
-DOCKERHUB_USERNAME=<your Docker Hub username>
-DOCKERHUB_TOKEN=<Docker Hub personal access token>
-```
-
-Create a release tag to publish a version:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-## New Session Starting Point
-
-```text
-Continue the Turing Smart Screen Docker packaging project in:
-/home/dff652/my_project/turing-smart-screen-docker
-
-Current state:
-- GitHub remote is git@github.com:dff652/turing-smart-screen-docker.git.
-- main has been pushed; current commit is 7c61e0e Initial Docker packaging.
-- GitHub Actions workflow exists at .github/workflows/docker-publish.yml.
-- Default upstream ref is 3.10.0.
-- Build target is linux/amd64 first.
-- Final Docker image has not been fully built yet.
-- Docker Hub/GHCR publishing is planned.
-- Required GitHub secrets still need to be configured:
-  DOCKERHUB_USERNAME and DOCKERHUB_TOKEN.
-
-Next tasks:
-1. Check the GitHub Actions run after the push.
-2. Add or verify GitHub repo secrets for Docker Hub publishing.
-3. If Actions fails, inspect logs and patch only the minimum missing dependency or workflow issue.
-4. After image build succeeds, run the import smoke test:
-   docker run --rm <image> python -c "import psutil, serial, usb; print('ok')"
-5. Create and push tag v0.1.0 after the image is verified.
-6. Then test the published image on FnOS/NAS with the actual screen attached.
-```
+See [ROADMAP.md](ROADMAP.md) for the current work checklist.
