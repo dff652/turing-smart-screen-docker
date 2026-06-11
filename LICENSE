@@ -1,0 +1,12 @@
+GPL-3.0-or-later
+
+This Docker packaging project is distributed under the GNU General Public
+License version 3 or later.
+
+The container image downloads and packages the upstream project
+mathoudebine/turing-smart-screen-python, which is licensed under GPL-3.0.
+When distributing built images, keep the upstream license, copyright notices,
+and source reference available.
+
+Full GPL-3.0 license text:
+https://www.gnu.org/licenses/gpl-3.0.txt

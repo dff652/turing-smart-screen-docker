@@ -1,0 +1,25 @@
+services:
+  turing-smart-screen:
+    build:
+      context: .
+      args:
+        TURING_REF: ${TURING_REF:-3.10.0}
+    image: ${IMAGE:-local/turing-smart-screen-python:${TURING_REF:-3.10.0}}
+    container_name: turing-smart-screen
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    devices:
+      - ${TURING_SERIAL_DEVICE:-/dev/ttyACM0}:${TURING_SERIAL_DEVICE:-/dev/ttyACM0}
+    device_cgroup_rules:
+      - "c 166:* rmw" # ttyACM*
+      - "c 188:* rmw" # ttyUSB*
+      - "c 189:* rmw" # USB bus devices for TUR_USB revisions
+    cap_add:
+      - NET_RAW
+    volumes:
+      - ./config:/config
+      - /dev/bus/usb:/dev/bus/usb
+      - /sys:/sys:ro
+      - /run/udev:/run/udev:ro
