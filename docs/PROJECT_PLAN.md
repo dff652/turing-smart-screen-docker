@@ -24,6 +24,10 @@ only needs Docker and USB/serial device access.
 - Dockerfile, Compose file, entrypoint, README, and GitHub Actions workflow exist.
 - Default upstream ref is `3.10.0`.
 - Build target is `linux/amd64` first, matching Intel N100/FnOS.
+- GitHub remote is configured:
+  `git@github.com:dff652/turing-smart-screen-docker.git`.
+- `main` has been pushed to GitHub at commit
+  `7c61e0e Initial Docker packaging`.
 
 Verified locally on 2026-06-11:
 
@@ -101,15 +105,26 @@ on the N100/FnOS target.
 
 ## GitHub Repository Setup
 
-`gh` is not installed in the current environment, so remote repo creation and push
-must be done manually or after installing/logging in to GitHub CLI.
+`gh` is not installed in the current environment. The remote was created/pushed
+manually by the user.
 
-Manual commands:
+Current remote:
+
+```bash
+origin git@github.com:dff652/turing-smart-screen-docker.git
+```
+
+Pushed commit:
+
+```text
+7c61e0e Initial Docker packaging
+```
+
+The setup commands already run:
 
 ```bash
 cd /home/dff652/my_project/turing-smart-screen-docker
-git remote add origin git@github.com:<your-user>/turing-smart-screen-docker.git
-git branch -M main
+git remote add origin git@github.com:dff652/turing-smart-screen-docker.git
 git push -u origin main
 ```
 
@@ -125,4 +140,31 @@ Create a release tag to publish a version:
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
+```
+
+## New Session Starting Point
+
+```text
+Continue the Turing Smart Screen Docker packaging project in:
+/home/dff652/my_project/turing-smart-screen-docker
+
+Current state:
+- GitHub remote is git@github.com:dff652/turing-smart-screen-docker.git.
+- main has been pushed; current commit is 7c61e0e Initial Docker packaging.
+- GitHub Actions workflow exists at .github/workflows/docker-publish.yml.
+- Default upstream ref is 3.10.0.
+- Build target is linux/amd64 first.
+- Final Docker image has not been fully built yet.
+- Docker Hub/GHCR publishing is planned.
+- Required GitHub secrets still need to be configured:
+  DOCKERHUB_USERNAME and DOCKERHUB_TOKEN.
+
+Next tasks:
+1. Check the GitHub Actions run after the push.
+2. Add or verify GitHub repo secrets for Docker Hub publishing.
+3. If Actions fails, inspect logs and patch only the minimum missing dependency or workflow issue.
+4. After image build succeeds, run the import smoke test:
+   docker run --rm <image> python -c "import psutil, serial, usb; print('ok')"
+5. Create and push tag v0.1.0 after the image is verified.
+6. Then test the published image on FnOS/NAS with the actual screen attached.
 ```

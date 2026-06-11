@@ -18,7 +18,10 @@ Date: 2026-06-11.
 - Default upstream ref: `3.10.0`
 - First supported platform: `linux/amd64`
 - Final Docker image has not been fully built yet.
-- Local `gh` CLI is not installed, so GitHub repo creation and push are not done.
+- GitHub remote is configured and `main` has been pushed:
+  `git@github.com:dff652/turing-smart-screen-docker.git`
+- Local `gh` CLI is not installed, but it is no longer needed for the initial
+  remote setup.
 
 Local checks already done in the prototype:
 
@@ -178,6 +181,20 @@ password.
 
 ## Repository Setup
 
+Current remote:
+
+```bash
+git remote -v
+# origin  git@github.com:dff652/turing-smart-screen-docker.git (fetch)
+# origin  git@github.com:dff652/turing-smart-screen-docker.git (push)
+```
+
+Current pushed commit:
+
+```text
+7c61e0e Initial Docker packaging
+```
+
 Local repo initialization:
 
 ```bash
@@ -200,6 +217,35 @@ Publish a release image:
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
+```
+
+## Continue In A New Session
+
+Use this as the next-session starting prompt:
+
+```text
+Continue the Turing Smart Screen Docker packaging project in:
+/home/dff652/my_project/turing-smart-screen-docker
+
+Current state:
+- GitHub remote is git@github.com:dff652/turing-smart-screen-docker.git.
+- main has been pushed; current commit is 7c61e0e Initial Docker packaging.
+- GitHub Actions workflow exists at .github/workflows/docker-publish.yml.
+- Default upstream ref is 3.10.0.
+- Build target is linux/amd64 first.
+- Final Docker image has not been fully built yet.
+- Docker Hub/GHCR publishing is planned.
+- Required GitHub secrets still need to be configured:
+  DOCKERHUB_USERNAME and DOCKERHUB_TOKEN.
+
+Next tasks:
+1. Check the GitHub Actions run after the push.
+2. Add or verify GitHub repo secrets for Docker Hub publishing.
+3. If Actions fails, inspect logs and patch only the minimum missing dependency or workflow issue.
+4. After image build succeeds, run the import smoke test:
+   docker run --rm <image> python -c "import psutil, serial, usb; print('ok')"
+5. Create and push tag v0.1.0 after the image is verified.
+6. Then test the published image on FnOS/NAS with the actual screen attached.
 ```
 
 ## Remaining Work
