@@ -52,6 +52,46 @@ display:
 
 如果 Docker 内部的 `COM_PORT: "AUTO"` 不稳定，请直接设置真实设备路径。
 
+## 真机验证（2026-06-12，Turing 3.5" rev A）
+
+已在 FnOS `zbox-ci331`（Intel N100）+ Turing 3.5" 副屏上跑通，结论：**对这块屏开箱即用，无需修改 `config.yaml`。**
+
+直接用下面这份"拉镜像版" compose（去掉 `build:`，`image` 写死已发布镜像），`docker compose up -d` 后屏幕几秒内点亮、正常刷硬件信息：
+
+```yaml
+services:
+  turing-smart-screen:
+    image: dff652/turing-smart-screen:latest
+    container_name: turing-smart-screen
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: Asia/Shanghai
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    device_cgroup_rules:
+      - "c 166:* rmw"   # ttyACM*
+      - "c 188:* rmw"   # ttyUSB*
+      - "c 189:* rmw"   # USB bus (TUR_USB)
+    cap_add:
+      - NET_RAW
+    volumes:
+      - ./config:/config
+      - /dev/bus/usb:/dev/bus/usb
+      - /sys:/sys:ro
+      - /run/udev:/run/udev:ro
+```
+
+**为什么不用改 config：**
+
+1. **`COM_PORT: AUTO` 能自动认到**。本 compose 挂了 `/sys:ro` + `/run/udev:ro` + `/dev/bus/usb`，容器内 pyserial 能读到屏的 USB `serial_number`（Turing 3.5" 为 `USB35INCHIPSV2`），rev A 的 auto-detect 一匹配就找到了 `/dev/ttyACM0`。**只透传裸设备节点（如某些第三方镜像）会缺 `/sys` 元数据导致 AUTO 失败**——挂载 `/sys` 是本项目的关键设计。
+2. **上游默认值正好匹配**：`config.yaml.dist` 默认 `REVISION: A` + `THEME: 3.5inchTheme2`，正是 Turing 3.5"（rev A）的正解，无需改。
+3. 唯一默认空着的是 `ETH: ""`，只影响**网速组件**（其余 CPU/内存/温度/磁盘照常）。需要网速就把它设成本机网卡名（实测飞牛是 `enp2s0`）。
+
+**硬件铁律（与镜像无关）**：屏必须接**能传数据的 USB 口**。实测某个 USB-C 口只供电、不枚举串口（`/dev/ttyACM*` 不出现）；换到主板 **USB-A** 数据口后 `cdc_acm` 自动加载、`/dev/ttyACM0` 才出现。
+
+> 其他型号 / AUTO 不稳时，仍按下文「设备访问」写死 `COM_PORT`，并按屏改 `REVISION`、`THEME`。
+
 ## 设备访问
 
 大多数 UART 屏幕会显示为 `/dev/ttyACM0` 或 `/dev/ttyUSB0`。
