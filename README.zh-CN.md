@@ -47,16 +47,21 @@ config:
 display:
   REVISION: A
   BRIGHTNESS: 20
-  RESET_ON_STARTUP: true
+  RESET_ON_STARTUP: false
 ```
 
-如果 Docker 内部的 `COM_PORT: "AUTO"` 不稳定，请直接设置真实设备路径。
+对于 Turing 3.5" rev A，建议把容器内串口固定为 `/dev/ttyACM0`，并关闭启动复位，
+避免复位后 USB 重新枚举造成串口编号变化。
 
-## 真机验证（2026-06-12，Turing 3.5" rev A）
+## 真机验证（2026-06-12、2026-09-07，Turing 3.5" rev A）
 
-已在 FnOS `zbox-ci331`（Intel N100）+ Turing 3.5" 副屏上跑通，结论：**对这块屏开箱即用，无需修改 `config.yaml`。**
+已在 FnOS `zbox-ci331`（Intel N100）+ Turing 3.5" 副屏上跑通。首次部署时宿主设备为
+`/dev/ttyACM0`；2026-09-07 设备重新枚举为 `/dev/ttyACM1`，旧 compose 因仍引用
+`/dev/ttyACM0` 而在创建容器时报 `no such file or directory`。
 
-直接用下面这份"拉镜像版" compose（去掉 `build:`，`image` 写死已发布镜像），`docker compose up -d` 后屏幕几秒内点亮、正常刷硬件信息：
+这块屏的稳定宿主路径为
+`/dev/serial/by-id/usb-Turing_UsbMonitor_USB35INCHIPSV2-if00`。下面的"拉镜像版"
+compose 把该路径映射到容器内固定的 `/dev/ttyACM0`：
 
 ```yaml
 services:
@@ -68,7 +73,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     devices:
-      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/serial/by-id/usb-Turing_UsbMonitor_USB35INCHIPSV2-if00:/dev/ttyACM0
     device_cgroup_rules:
       - "c 166:* rmw"   # ttyACM*
       - "c 188:* rmw"   # ttyUSB*
@@ -82,19 +87,43 @@ services:
       - /run/udev:/run/udev:ro
 ```
 
-**为什么不用改 config：**
+同时把 `./config/config.yaml` 固定为：
 
-1. **`COM_PORT: AUTO` 能自动认到**。本 compose 挂了 `/sys:ro` + `/run/udev:ro` + `/dev/bus/usb`，容器内 pyserial 能读到屏的 USB `serial_number`（Turing 3.5" 为 `USB35INCHIPSV2`），rev A 的 auto-detect 一匹配就找到了 `/dev/ttyACM0`。**只透传裸设备节点（如某些第三方镜像）会缺 `/sys` 元数据导致 AUTO 失败**——挂载 `/sys` 是本项目的关键设计。
-2. **上游默认值正好匹配**：`config.yaml.dist` 默认 `REVISION: A` + `THEME: 3.5inchTheme2`，正是 Turing 3.5"（rev A）的正解，无需改。
-3. 唯一默认空着的是 `ETH: ""`，只影响**网速组件**（其余 CPU/内存/温度/磁盘照常）。需要网速就把它设成本机网卡名（实测飞牛是 `enp2s0`）。
+```yaml
+config:
+  COM_PORT: "/dev/ttyACM0"
+display:
+  RESET_ON_STARTUP: false
+```
 
-**硬件铁律（与镜像无关）**：屏必须接**能传数据的 USB 口**。实测某个 USB-C 口只供电、不枚举串口（`/dev/ttyACM*` 不出现）；换到主板 **USB-A** 数据口后 `cdc_acm` 自动加载、`/dev/ttyACM0` 才出现。
+**为什么这样更稳定：**
+
+1. 宿主机用 USB 序列号生成的 `by-id` 路径，不受 `ttyACM0`、`ttyACM1` 编号变化影响。
+2. 容器内始终使用 `/dev/ttyACM0`，与 `COM_PORT` 保持一致；关闭 `RESET_ON_STARTUP`
+   可避免 rev A 启动复位触发重新枚举。
+3. `/sys:ro`、`/run/udev:ro` 和 `/dev/bus/usb` 挂载仍保留，供 pyserial 和其他
+   USB 模式读取设备元数据。
+4. `REVISION: A` + `THEME: 3.5inchTheme2` 适配这块屏；`ETH: "enp2s0"` 可启用
+   FnOS 主机的网速组件。
+
+**硬件铁律（与镜像无关）**：屏必须接**能传数据的 USB 口**。实测某个 USB-C 口只供电、不枚举串口（`/dev/ttyACM*` 不出现）；换到主板 **USB-A** 数据口后 `cdc_acm` 自动加载并创建串口设备。
 
 > 其他型号 / AUTO 不稳时，仍按下文「设备访问」写死 `COM_PORT`，并按屏改 `REVISION`、`THEME`。
 
 ## 设备访问
 
 大多数 UART 屏幕会显示为 `/dev/ttyACM0` 或 `/dev/ttyUSB0`。
+
+优先检查是否存在稳定路径：
+
+```bash
+ls -l /dev/serial/by-id/
+```
+
+如果使用 `by-id`，compose 的宿主路径和容器路径应分别填写，例如
+`/dev/serial/by-id/<设备ID>:/dev/ttyACM0`，并让 `COM_PORT` 指向容器内的
+`/dev/ttyACM0`。项目默认的 `TURING_SERIAL_DEVICE` 会把同一路径同时用于两侧，
+适合直接使用 `/dev/ttyACM*` 或 `/dev/ttyUSB*` 的场景。
 
 必要时编辑 `.env`：
 

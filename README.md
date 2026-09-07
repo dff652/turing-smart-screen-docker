@@ -48,18 +48,22 @@ config:
 display:
   REVISION: A
   BRIGHTNESS: 20
-  RESET_ON_STARTUP: true
+  RESET_ON_STARTUP: false
 ```
 
-If `COM_PORT: "AUTO"` is unstable in Docker, set the real device path directly.
+For a Turing 3.5" rev-A screen, pin the in-container port to `/dev/ttyACM0` and
+disable startup reset to avoid USB re-enumeration changing the device node.
 
-## Verified on hardware (2026-06-12, Turing 3.5" rev A)
+## Verified on hardware (2026-06-12 and 2026-09-07, Turing 3.5" rev A)
 
-Validated on FnOS `zbox-ci331` (Intel N100) with a Turing 3.5" screen. Result:
-**works out of the box for this screen, with no `config.yaml` edits.**
+Validated on FnOS `zbox-ci331` (Intel N100) with a Turing 3.5" screen. The host
+device was `/dev/ttyACM0` during the first deployment. On 2026-09-07 it
+re-enumerated as `/dev/ttyACM1`, and the old compose failed before container
+startup because `/dev/ttyACM0` no longer existed.
 
-Use this "pull image" compose (drops `build:`, pins the published `image`). After
-`docker compose up -d` the screen lights up within seconds and shows live sensors:
+This screen has a stable host path,
+`/dev/serial/by-id/usb-Turing_UsbMonitor_USB35INCHIPSV2-if00`. This "pull image"
+compose maps that path to a fixed `/dev/ttyACM0` inside the container:
 
 ```yaml
 services:
@@ -71,7 +75,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     devices:
-      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/serial/by-id/usb-Turing_UsbMonitor_USB35INCHIPSV2-if00:/dev/ttyACM0
     device_cgroup_rules:
       - "c 166:* rmw"   # ttyACM*
       - "c 188:* rmw"   # ttyUSB*
@@ -85,24 +89,31 @@ services:
       - /run/udev:/run/udev:ro
 ```
 
-**Why no config edit is needed:**
+Pin `./config/config.yaml` accordingly:
 
-1. **`COM_PORT: AUTO` auto-detects here.** This compose mounts `/sys:ro` +
-   `/run/udev:ro` + `/dev/bus/usb`, so pyserial inside the container can read the
-   screen's USB `serial_number` (`USB35INCHIPSV2` for the Turing 3.5"), and the
-   rev-A auto-detect matches it to `/dev/ttyACM0`. Passing only the bare device
-   node (as some third-party images do) lacks this `/sys` metadata and makes AUTO
-   fail — mounting `/sys` is the key design choice here.
-2. **Upstream defaults already match:** `config.yaml.dist` defaults to
-   `REVISION: A` + `THEME: 3.5inchTheme2`, exactly right for a Turing 3.5" (rev A).
-3. The only empty default is `ETH: ""`, which only affects the network-speed
-   widget. Set it to the host NIC name (e.g. `enp2s0` on this FnOS box) if you want
-   network stats.
+```yaml
+config:
+  COM_PORT: "/dev/ttyACM0"
+display:
+  RESET_ON_STARTUP: false
+```
+
+**Why this is stable:**
+
+1. The host-side `by-id` path is based on the USB serial number and survives
+   changes between `ttyACM0` and `ttyACM1`.
+2. The container always uses `/dev/ttyACM0`, matching `COM_PORT`. Disabling
+   `RESET_ON_STARTUP` prevents a rev-A startup reset from triggering another
+   re-enumeration.
+3. The `/sys:ro`, `/run/udev:ro`, and `/dev/bus/usb` mounts remain available for
+   pyserial metadata and other USB modes.
+4. `REVISION: A` + `THEME: 3.5inchTheme2` match this screen. Set `ETH: "enp2s0"`
+   to enable the network-speed widget on this FnOS host.
 
 **Hardware rule (image-independent):** the screen must be on a USB port that
 carries **data**. A power-only USB-C port lit the screen but never enumerated the
 serial device (no `/dev/ttyACM*`); a motherboard **USB-A** port loaded `cdc_acm`
-and created `/dev/ttyACM0`.
+and created a serial device.
 
 > For other models / unstable AUTO, still pin `COM_PORT` and set `REVISION`/`THEME`
 > per the section below.
@@ -110,6 +121,18 @@ and created `/dev/ttyACM0`.
 ## Device Access
 
 Most UART-based screens appear as `/dev/ttyACM0` or `/dev/ttyUSB0`.
+
+Prefer a stable device path when one is available:
+
+```bash
+ls -l /dev/serial/by-id/
+```
+
+For `by-id`, set distinct host and container paths in compose, for example
+`/dev/serial/by-id/<device-id>:/dev/ttyACM0`, and set `COM_PORT` to the
+in-container `/dev/ttyACM0`. The default `TURING_SERIAL_DEVICE` uses the same
+path on both sides and is intended for direct `/dev/ttyACM*` or `/dev/ttyUSB*`
+paths.
 
 Edit `.env` if needed:
 
